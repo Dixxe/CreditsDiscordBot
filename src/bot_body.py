@@ -1,6 +1,6 @@
 import disnake
 from disnake.ext import tasks, commands
-
+import json
 intents = disnake.Intents.default()
 intents.message_content = True
 
@@ -17,14 +17,40 @@ bot = commands.Bot(command_prefix='>', intents=intents, help_command=None, activ
 
 global roles, service, channels
 roles = {} # {user.name : role.id }
-service = [True, 1, 20, '�'] # [0] - True/False role buying, [1] - how much credits for one reaction(emoji), [2] role cost, [3] - emoji
-channels = {} # {channel.id : total_amount_of_credits}
+service = [True, 1, 20, '🍪'] # [0] - True/False role buying, [1] - how much credits for one reaction(emoji), [2] role cost, [3] - emoji
+channels = {} # {channel.id : 0} for me its just simple to use channel id to get it
 users = {} # {user.name : amount_of_credits}
 
+
+##--сохранение--##
+def exportData(users, service, roles, channels):
+    data = {'users': users,
+            'service'    : service    }
+    with open('value.json', 'w') as save:
+        json.dump(data, save)
+##--сохранение--##
+
+##--загрузка--##
+def importData():
+    with open('value.json', 'r') as save:
+        data = json.load(save)
+        users = data['users']
+        service = data['service']
+    return users, service
+##--загрузка--##
+
+##--очистка--##
+def flushs():
+    data = {'users': {},
+            'service': [True, 1, 20, '🍪']}
+    with open('value.json', 'w') as save:
+        json.dump(data, save)
+
+##############################
 @bot.event
 async def on_ready():
     print(f"We have logged in {bot.user}")
-    debug.start()
+    parse_channels.start()
 
 @bot.slash_command(description='Описание функций бота')
 async def help(slash_inter):
@@ -71,21 +97,25 @@ async def unset(slash_inter, channel : disnake.TextChannel or disnake.ForumChann
 
 @bot.slash_command(description='Купить роль за ваши кредиты.')
 async def role(slash_inter, name : str or int, color : str):
-    await slash_inter.response.defer()
-    guild = slash_inter.author.guild
-    int_color = int(color, 16)
-    if ((slash_inter.author.name in users.keys()) and ( slash_inter.author.name not in roles.keys())):
-        credits = int(users[slash_inter.author.name])
-        if (credits >= service[2]):
-            users[slash_inter.author.name] -= service[2]
-            role = await guild.create_role(name=name, color=int_color, reason=f'Покупная роль {slash_inter.author.name}')
-            roles[slash_inter.author.name] = role.id
-            await slash_inter.author.add_roles(disnake.abc.Object(role.id))
-            print(roles)
-            print(users)
-            await slash_inter.edit_original_response('Поздравляю с покупкой вашей новой роли!')
+    if(service[0]):
+        await slash_inter.response.defer()
+        guild = slash_inter.author.guild
+        int_color = int(color, 16)
+        if ((slash_inter.author.name in users.keys()) and ( slash_inter.author.name not in roles.keys())):
+            credits = int(users[slash_inter.author.name])
+            if (credits >= service[2]):
+                users[slash_inter.author.name] -= service[2]
+                role = await guild.create_role(name=name, color=int_color, reason=f'Покупная роль {slash_inter.author.name}')
+                roles[slash_inter.author.name] = role.id
+                await slash_inter.author.add_roles(disnake.abc.Object(role.id))
+                print(roles)
+                print(users)
+                await slash_inter.edit_original_response('Поздравляю с покупкой вашей новой роли!')
+        else:
+            await slash_inter.edit_original_response(f'Вам не хватает денег или у вас уже есть роль. Роль стоит - {service[2]}')
     else:
-        await slash_inter.edit_original_response(f'Вам не хватает денег или у вас уже есть роль. Роль стоит - {service[2]}')
+        await slash_inter.response.defer(ephemeral=True)
+        await slash_inter.edit_original_response(f'Покупка ролей на сервере отключена :(')
 
 @bot.slash_command(description='Изменить количество кредитов у пользователя.')
 async def manage(slash_inter, user : disnake.Member, amount : int):
@@ -116,17 +146,16 @@ async def variables(slash_inter, role_buying : bool, credit_course : int, role_c
     await slash_inter.edit_original_response(f'Переменные настроены. Покупка роли: {service[0]}, Курс: {service[1]} кредитов за реакцию, цена роли: {service[2]} кредитов')
 
 ########################################################################3
-@tasks.loop(minutes=1)
+@tasks.loop(seconds=5)
 async def parse_channels():
     for channel_id in channels:
         channel = bot.get_channel(channel_id)
+        async for msg in channel.history(limit=200):
+            for reaction in range(len(msg.reactions)):
+                if(str(msg.reactions[reaction]) == str(service[3])):
+                    users[msg.author.name] = (msg.reactions[reaction].count + service[1])
 
-@tasks.loop(seconds=30)
-async def debug():
-    print(service)
-    print(roles)
-    print(users)
+
 with open('token.txt', 'r') as file:
-    token = file.read()
-    
+    token = file.read() 
 bot.run(token)
