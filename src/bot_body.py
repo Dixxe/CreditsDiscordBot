@@ -1,6 +1,8 @@
 import disnake
 from disnake.ext import tasks, commands
 import json
+from random import randint
+
 intents = disnake.Intents.default()
 intents.message_content = True
 
@@ -50,7 +52,19 @@ def flushs():
 @bot.event
 async def on_ready():
     print(f"We have logged in {bot.user}")
-    parse_channels.start()
+
+@bot.event
+async def on_reaction_add(reaction, user):
+    msg = reaction.message
+    if(str(reaction) == str(service[3])):
+        users[msg.author.name] += 1
+
+@bot.event
+async def on_reaction_remove(reaction, user):
+    msg = reaction.message
+    if(str(reaction) == str(service[3])):
+        users[msg.author.name] -= 1
+###################################33
 
 @bot.slash_command(description='Описание функций бота')
 async def help(slash_inter):
@@ -60,7 +74,7 @@ async def help(slash_inter):
     emb.add_field(name='/emoji', value='Привязать эмодзи за который будут выдаваться кредиты.')
     emb.add_field(name='/unset [канал]', value='Отвязать канал где будут считаться кредиты.')
     emb.add_field(name='/role [название] [цвет в формате HEX]', value='Купить роль за ваши кредиты.')
-    emb.add_field(name='/manage [пользователь] [количество]', value='Изменить количество кредитов у пользователя.')
+    emb.add_field(name='/credits', value='Показать доску лидеров по набранным кредитам.')
     emb.add_field(name='/delete_role [роль]', value='Удалить покупную роль. Кредиты не возмещаются.')
     emb.add_field(name='/variables', value='Поменять параметры под ваш сервер.')
     emb.set_author(name='Бусти создателя', url='https://boosty.to/dixxe')
@@ -74,6 +88,24 @@ async def set(slash_inter, channel : disnake.abc.GuildChannel):
     else:
         channels[channel.id] = 0
         await slash_inter.edit_original_response('Канал привязан')
+
+@bot.slash_command(description='Показать доску лидеров по набранным кредитам.')
+async def credits(slash_inter):
+    await slash_inter.response.defer()
+    try:
+        guild = slash_inter.author.guild
+        pair = []
+        emb = disnake.Embed(title='Топ людей по кредмтам:', color=randint(1, 16777216))
+        emb.set_author(name='Бусти создателя', url='https://boosty.to/dixxe')
+        for user in users.keys():
+            credits = users[user]        
+            pair.append((user, credits))
+        sorted_pair = sorted(pair, key=lambda x: x[1], reverse=True)
+        for i, (user, credits) in enumerate(sorted_pair[:10]):
+            try:emb.add_field(name=f"{i+1} место. {user}", value=f"Количество кредитов: {credits}, есть персональная роль {guild.get_role(roles[user]).mention}.", inline=True)
+            except Exception:emb.add_field(name=f"{i+1} место. {user}", value=f"Количество кредитов: {credits}.", inline=True)
+        await slash_inter.edit_original_response(embed=emb)
+    except Exception as e: await slash_inter.edit_original_response(f"Что-то пошло не так, отправьте этот код ошибки мне в телеграм:\n```{e}```")
 
 @bot.slash_command(description='Привязать эмодзи за который будут выдаваться кредиты.')
 async def emoji(slash_inter, emoji):
@@ -111,20 +143,13 @@ async def role(slash_inter, name : str or int, color : str):
                 print(roles)
                 print(users)
                 await slash_inter.edit_original_response('Поздравляю с покупкой вашей новой роли!')
+            else:
+                await slash_inter.edit_original_response(f'Вам не хватает кредитов! У вас {users[slash_inter.author.name]} кредитов, а роль стоит {service[2]}')
         else:
-            await slash_inter.edit_original_response(f'Вам не хватает денег или у вас уже есть роль. Роль стоит - {service[2]}')
+            await slash_inter.edit_original_response(f'У вас нету кредитов или уже есть роль.')
     else:
         await slash_inter.response.defer(ephemeral=True)
         await slash_inter.edit_original_response(f'Покупка ролей на сервере отключена :(')
-
-@bot.slash_command(description='Изменить количество кредитов у пользователя.')
-async def manage(slash_inter, user : disnake.Member, amount : int):
-    await slash_inter.response.defer()
-    if user.name not in users.keys():
-        users[user.name] = amount
-    else:
-        users[user.name] += amount
-    await slash_inter.edit_original_response(f'Вы изменили коичетсво кредитов пользователя. Теперь у него {users[user.name]} кредитов')
 
 @bot.slash_command(description='Удалить покупную роль. Кредиты не возмещаются.')
 async def delete_role(slash_inter, role : disnake.Role):
@@ -146,14 +171,15 @@ async def variables(slash_inter, role_buying : bool, credit_course : int, role_c
     await slash_inter.edit_original_response(f'Переменные настроены. Покупка роли: {service[0]}, Курс: {service[1]} кредитов за реакцию, цена роли: {service[2]} кредитов')
 
 ########################################################################3
-@tasks.loop(seconds=5)
+'''@tasks.loop(seconds=5)
 async def parse_channels():
     for channel_id in channels:
         channel = bot.get_channel(channel_id)
         async for msg in channel.history(limit=200):
             for reaction in range(len(msg.reactions)):
                 if(str(msg.reactions[reaction]) == str(service[3])):
-                    users[msg.author.name] = (msg.reactions[reaction].count + service[1])
+                    users[msg.author.name] = (msg.reactions[reaction].count + service[1])'''
+
 
 
 with open('token.txt', 'r') as file:
